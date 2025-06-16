@@ -1,0 +1,4 @@
+app/chroma_db
+.DS_Store
+.vscode
+application.log
