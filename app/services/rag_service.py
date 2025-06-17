@@ -1,7 +1,6 @@
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
-from utils.promps import MULTI_QUERY_GEN_PROMPT, POLITICAL_ANALYSIS_PROMPT
 from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
 from utils.logger import logger
@@ -24,8 +23,8 @@ class RagChain:
         self.question = question
         return self
 
-    def with_multi_querying(self):
-        prompt_perspectives = ChatPromptTemplate.from_template(MULTI_QUERY_GEN_PROMPT)
+    def with_multi_querying(self, prompt):
+        prompt_perspectives = ChatPromptTemplate.from_template(prompt)
 
         perspective_chain = prompt_perspectives | self.llm | StrOutputParser()
 
@@ -52,7 +51,7 @@ class RagChain:
         return self
         
 
-    def run(self) -> RAGResponse:
+    def run(self, prompt) -> RAGResponse:
         if not self.llm:
             return "Error: LLM not available"
         
@@ -65,10 +64,10 @@ class RagChain:
             
             context = "\n\n".join([doc.page_content for doc in retrieved_docs[:5]])  # Limit context
                         
-            prompt = ChatPromptTemplate.from_template(POLITICAL_ANALYSIS_PROMPT)
+            llm_prompt = ChatPromptTemplate.from_template(prompt)
             
             logger.info("  |  Generating final answer...")
-            final_chain = prompt | self.llm.with_structured_output(RAGResponse)
+            final_chain = llm_prompt | self.llm.with_structured_output(RAGResponse)
      
             answer = final_chain.invoke({
                 "context": context,
