@@ -1,15 +1,15 @@
 from langchain_ollama import OllamaEmbeddings
-from langchain_ollama import OllamaLLM
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
-from utils.promps import MULTI_QUERY_GEN_PROMPT, MULTI_QUERY_FINAL_PROMPT
+from utils.promps import MULTI_QUERY_GEN_PROMPT, POLITICAL_ANALYSIS_PROMPT
 from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
 from utils.logger import logger
+from model.response import RAGResponse
+from langchain_ollama import ChatOllama
 
 class RagChain:
     def __init__(self):
-        # Initialize the vectorstore and retriever once
         self.vectorstore = VectorStore()
         self.question = None
         self.queries = []
@@ -25,19 +25,14 @@ class RagChain:
         return self
 
     def with_multi_querying(self):
-        # Step 1: Generate multiple query perspectives
-        template = MULTI_QUERY_GEN_PROMPT
-
-        prompt_perspectives = ChatPromptTemplate.from_template(template)
+        prompt_perspectives = ChatPromptTemplate.from_template(MULTI_QUERY_GEN_PROMPT)
 
         perspective_chain = prompt_perspectives | self.llm | StrOutputParser()
 
         logger.info("  |  Generating query perspectives...")
-
         perspectives = perspective_chain.invoke({"question": self.question})
 
         self.queries = [q.strip() for q in perspectives.split("\n") if q.strip()]
-
         logger.info(f"  |  Generated {len(self.queries)} query perspectives")
 
         return self
@@ -46,7 +41,7 @@ class RagChain:
     def with_llm(self, model_name="deepseek-r1:8b", temperature=0):
         try:
             logger.info(f"  |  Initializing LLM with model: {model_name}")
-            self.llm = OllamaLLM(model=model_name, temperature=temperature)
+            self.llm = ChatOllama(model=model_name, temperature=temperature)
             embedding = OllamaEmbeddings(model=model_name)
             self.vectorstore._initialize_vectorstore(embeddings=embedding)
 
@@ -57,7 +52,7 @@ class RagChain:
         return self
         
 
-    def run(self):
+    def run(self) -> RAGResponse:
         if not self.llm:
             return "Error: LLM not available"
         
@@ -70,23 +65,21 @@ class RagChain:
             
             context = "\n\n".join([doc.page_content for doc in retrieved_docs[:5]])  # Limit context
                         
-            prompt = ChatPromptTemplate.from_template(MULTI_QUERY_FINAL_PROMPT)
+            prompt = ChatPromptTemplate.from_template(POLITICAL_ANALYSIS_PROMPT)
             
             logger.info("  |  Generating final answer...")
-            final_chain = prompt | self.llm | StrOutputParser()
-            
+            final_chain = prompt | self.llm.with_structured_output(RAGResponse)
+     
             answer = final_chain.invoke({
                 "context": context,
                 "question": self.question
             })
             
-            # Sanitize and return the response
-            sanitized_answer = sanitize_response(response=answer)
-            logger.info(f"<--  Final answer:\n{{{sanitized_answer}}}")
+            logger.info(f"<--  Final answer:\n{{{answer}}}")
             
-            return sanitized_answer
+            return answer
             
         except Exception as e:
             error_msg = f"Error executing RAG chain: {e}"
-            logger.info(error_msg)
+            logger.error(error_msg)
             return error_msg
