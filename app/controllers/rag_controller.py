@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from services.rag_service import RagChain
-from utils.promps import MULTI_QUERY_GEN_PROMPT, POLITICAL_ANALYSIS_PROMPT
+from app.utils.prompts import multi_query_gen_prompt, analysis_prompt
 
 app = FastAPI()
 
@@ -15,8 +15,8 @@ def generate_response(question: str):
 
     response = RagChain() \
         .with_question(question=question) \
-        .with_llm("deepseek-r1:8b") \
-        .with_multi_querying(prompt=MULTI_QUERY_GEN_PROMPT) \
-        .run(prompt=POLITICAL_ANALYSIS_PROMPT)
+        .with_llm("deepseek-r1:8b", temperature=0) \
+        .use_multi_querying(prompt=multi_query_gen_prompt) \
+        .run(prompt=analysis_prompt)
     
     return response

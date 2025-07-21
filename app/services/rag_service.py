@@ -1,11 +1,11 @@
 from langchain_ollama import OllamaEmbeddings
-from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts import ChatPromptTemplate
 from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
 from utils.logger import logger
-from model.response import RAGResponse
+from app.model.response_model import RAGResponse
+from app.tools.query_augmentation_tool import MultiQueryTool
 from langchain_ollama import ChatOllama
+from langchain.prompts import ChatPromptTemplate
 
 class RagChain:
     def __init__(self):
@@ -22,16 +22,14 @@ class RagChain:
         logger.info(f"  |  Question: {question}")
         self.question = question
         return self
+    
+    def use_anonymized_planning(self):
 
-    def with_multi_querying(self, prompt):
-        prompt_perspectives = ChatPromptTemplate.from_template(prompt)
+        return self
 
-        perspective_chain = prompt_perspectives | self.llm | StrOutputParser()
 
-        logger.info("  |  Generating query perspectives...")
-        perspectives = perspective_chain.invoke({"question": self.question})
-
-        self.queries = [q.strip() for q in perspectives.split("\n") if q.strip()]
+    def use_multi_querying(self, prompt):
+        self.queries = MultiQueryTool.generate_multiple_queries(llm=self.llm, question=self.question, prompt=prompt)
         logger.info(f"  |  Generated {len(self.queries)} query perspectives")
 
         return self
@@ -57,7 +55,7 @@ class RagChain:
         
         if not self.queries:
             logger.info("No queries generated, generating now...")
-            self.with_multi_querying(self.question)
+            self.use_multi_querying(self.question)
             
         try:
             retrieved_docs = self.vectorstore.retrieve_relevant_documents(queries=self.queries, k=5)
