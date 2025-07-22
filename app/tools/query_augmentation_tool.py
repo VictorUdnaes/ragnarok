@@ -2,7 +2,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from utils.logger import logger
 
-class MultiQueryTool():
+class QueryAugmentationTool():
     def generate_multiple_queries(llm, question: str, prompt: str):
         prompt_perspectives = ChatPromptTemplate.from_template(prompt)
 

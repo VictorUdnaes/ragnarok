@@ -11,34 +11,30 @@ class PlanningTool:
         self.llm = llm
 
     def anonymize_question(self, question: str) -> AnonymizedQuestion:
-        anonymize_question_chain = (
-            PromptTemplate(
-                input_variables=["question"],
-                partial_variables={"format_instructions": JsonOutputParser(pydantic_object=AnonymizedQuestion).get_format_instructions()},
-                template=anonymizer_prompt
-            )
-        ) | self.llm.with_structured_output(AnonymizedQuestion)
-
-        return anonymize_question_chain.invoke(question)
+        return self \
+            .build_chain(["question"], anonymizer_prompt, AnonymizedQuestion) \
+            .invoke(input=question)
     
     def create_initial_plan(self, question: str) -> Plan:
-        initial_plan_chain = PromptTemplate(
-            template=planner_prompt,
-            input_variables=["question"], 
-        ) | self.llm.with_structured_output(Plan)
-
-        return initial_plan_chain.invoke(input=question)
+        return self \
+            .build_chain(["question"], planner_prompt, Plan) \
+            .invoke(input=question)
 
     def deanonymize_plan(self, plan: str, mapping:str) -> DeanonymizedPlan:
-        deanonymize_plan_chain = (
+        return self \
+            .build_chain(["plan", "mapping"], deanonymize_prompt, DeanonymizedPlan) \
+            .invoke({
+                "plan": plan,
+                "mapping": mapping
+            })
+    
+    def build_chain(self, input_variables: list[str], prompt: str, format_object) -> RunnableSequence:
+        chain = (
             PromptTemplate(
-                input_variables=["plan", "mapping"],
-                template=deanonymize_prompt
-            )
-        ) | self.llm.with_structured_output(DeanonymizedPlan)
+                input_variables=input_variables,
+                template=prompt
+            ) | self.llm.with_structured_output(format_object)
+        )
 
-        return deanonymize_plan_chain.invoke({
-            "plan": plan,
-            "mapping": mapping
-        })
+        return chain
     
