@@ -3,22 +3,35 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings  # Changed to Ollama
 from pathlib import Path
+from langchain.docstore.document import Document
 from utils.rag_util import get_unique_union
 from utils.logger import logger  # Import the logger
+from embedding.embedding_tool import EmbeddingTool  # Ensure OllamaEmbeddings is imported correctly
 
 class VectorStore:
     def __init__(self):
-        self.retriever = None
+        self.chunk_vectorstore = None
+        self.quote_vectorstore = None
+        self.chunk_retriever = None
+        self.quote_retriever = None
+        self.embedder = EmbeddingTool()
 
-    def _initialize_vectorstore(self, embeddings=OllamaEmbeddings(model="deepseek-r1:8b")):
+
+    def _initialize_vectorstore(self, embeddings=OllamaEmbeddings(model="llama3.1")):
         try:
-            self.vectorstore = Chroma(
+            self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
                 persist_directory="./chroma_db"
             )
-            self.retriever = self.vectorstore.as_retriever()
+            self.chunk_retriever = self.chunk_vectorstore.as_retriever()
 
-            test_results = self.vectorstore.similarity_search("test", k=1)
+            self.quote_vectorstore = Chroma(
+                embedding_function=embeddings,
+                persist_directory="./quote_chroma_db"
+            )
+            self.quote_retriever = self.quote_vectorstore.as_retriever()
+
+            test_results = self.chunk_vectorstore.similarity_search("test", k=1)
             if test_results:
                 logger.info(f"  |  Vectorstore initialized successfully")
             else:
@@ -27,48 +40,37 @@ class VectorStore:
 
         except Exception as e:
             logger.error(f"Error initializing vectorstore: {e}", exc_info=True)
-            self.retriever = None
+            self.chunk_retriever = None
 
-    def retrieve_relevant_documents(self, queries, k: int = 5):
-        logger.info("  |  Retrieving documents...")
+
+    def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
+        logger.info("  |  Retrieving quotes...")
         all_docs = []
         for i, query in enumerate(queries):
             try:
-                docs = self.retriever.invoke(query)
-                all_docs.extend(docs)
-                logger.debug(f"  |  Query {i+1}: Retrieved {len(docs)} documents")
+                found_docs = self.quote_retriever.invoke(query) if retriever == "chunk" else self.quote_retriever.invoke(query)
+                all_docs.extend(found_docs)
+                logger.debug(f"  |  Query {i+1}: Retrieved {len(found_docs)} documents")
+                
+                return get_unique_union([all_docs])
+            
             except Exception as e:
                 logger.error(f"Error retrieving for query {i+1}: {e}", exc_info=True)
 
-        unique_docs = get_unique_union([all_docs])
-        logger.info(f"  |  Found {len(unique_docs)} unique documents")
-        return unique_docs
-
-    def embedd_document(self, filename: str):
+        
+    def add_document_to_store(self, filename: str):
         logger.info(f"Embedding document: {filename}")
         try:
             current_dir = Path(__file__).parent
-            path = current_dir.parent / 'documents' / filename
+            path: str = current_dir.parent / 'documents' / filename
 
-            loader = JSONLoader(
-                file_path=path,
-                jq_schema='.pages[].text',
-                text_content=False
+            text_chunks = self.embedder.create_chunks_from_document(
+                document_path=path,
+                chunk_size=1000
             )
-            pages = loader.load()
 
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200
-            )
-            chunks = text_splitter.split_documents(pages)
-
-            Chroma.from_documents(
-                documents=chunks,
-                embedding=OllamaEmbeddings(model="deepseek-r1:8b"),
-                persist_directory="./chroma_db"
-            )
-            logger.info(f"Document {filename} embedded successfully")
+            self.chunk_vectorstore.add_documents(text_chunks)
+            logger.info(f"Document {filename} embedded and added to vectorstore successfully")
 
         except Exception as e:
             logger.error(f"Error embedding document {filename}: {e}", exc_info=True)

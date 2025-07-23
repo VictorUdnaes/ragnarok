@@ -10,8 +10,6 @@ Examples:
 
 Input: {question}
 
-{format_instructions}
-
 Output:
 You will put the anonymized question in the "anonymized_question" field, the mapping of variables to original entities in the "mapping" field, and an explanation of your choices in the "explaination" field.
 The anonymized_question field should not contain any named entities, only variables like X, Y, Z, etc.

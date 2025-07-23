@@ -2,18 +2,30 @@ import re
 import PyPDF2
 from langchain.docstore.document import Document
 import spacy
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 class EmbeddingTool():
     def __init__(self):
         self.nlp = spacy.load("nb_core_news_sm")  # Load once to avoid repeated loading
 
-    def embed_document_with_chunking(self, text: str, chunk_size: int = 1000) -> list[str]:
-        """Splits the text into chunks of specified size."""
-        return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    def create_chunks_from_document(self, document_path: str, chunk_size: int = 1000) -> list[Document]:
+        text_from_document = self.get_document_as_text(document_path)
+        text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=200
+            )
+        chunks = text_splitter.split_text(text=text_from_document)
+        document_chunks = [Document(page_content=chunk) for chunk in chunks]
+        
+        return document_chunks
     
-    def embed_document_with_pattern(self, text: str, pattern: str) -> list[str]:
+    def create_chunks_from_pattern(self, text: str, pattern: str) -> list[Document]:
         regex = re.compile(pattern)
-        return regex.findall(text)
+        chunks = regex.findall(text)
+        document_chunks = [Document(page_content=chunk) for chunk in chunks]
+
+        return document_chunks
+
     
     def pre_clean_for_spacy(self, text: str) -> str:
         patterns = [

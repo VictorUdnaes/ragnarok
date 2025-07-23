@@ -3,9 +3,10 @@ from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
 from utils.logger import logger
 from app.model.response_model import RAGResponse
-from app.tools.query_augmentation_tool import MultiQueryTool
+from app.tools.query_augmentation_tool import QueryAugmentationTool
 from langchain_ollama import ChatOllama
 from langchain.prompts import ChatPromptTemplate
+from langchain.schema import Document
 
 class RagChain:
     def __init__(self):
@@ -24,18 +25,15 @@ class RagChain:
         return self
     
     def use_anonymized_planning(self):
-
         return self
 
-
     def use_multi_querying(self, prompt):
-        self.queries = MultiQueryTool.generate_multiple_queries(llm=self.llm, question=self.question, prompt=prompt)
+        self.queries = QueryAugmentationTool.generate_multiple_queries(llm=self.llm, question=self.question, prompt=prompt)
         logger.info(f"  |  Generated {len(self.queries)} query perspectives")
 
         return self
-    
 
-    def with_llm(self, model_name="deepseek-r1:8b", temperature=0):
+    def with_llm(self, model_name="llama", temperature=0):
         try:
             logger.info(f"  |  Initializing LLM with model: {model_name}")
             self.llm = ChatOllama(model=model_name, temperature=temperature)
@@ -47,7 +45,6 @@ class RagChain:
             self.llm = None
 
         return self
-        
 
     def run(self, prompt) -> RAGResponse:
         if not self.llm:
@@ -58,10 +55,8 @@ class RagChain:
             self.use_multi_querying(self.question)
             
         try:
-            retrieved_docs = self.vectorstore.retrieve_relevant_documents(queries=self.queries, k=5)
-            
+            retrieved_docs: list[Document] = self.vectorstore.search_for_documents(queries=self.queries, k=5)
             context = "\n\n".join([doc.page_content for doc in retrieved_docs[:5]])  # Limit context
-                        
             llm_prompt = ChatPromptTemplate.from_template(prompt)
             
             logger.info("  |  Generating final answer...")
