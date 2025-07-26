@@ -15,3 +15,5 @@ class QueryAugmentationTool():
         logger.info("  |  Queries generated: {queries}")
         
         return queries
+    
+    

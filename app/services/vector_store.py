@@ -7,6 +7,11 @@ from langchain.docstore.document import Document
 from utils.rag_util import get_unique_union
 from utils.logger import logger  # Import the logger
 from embedding.embedding_tool import EmbeddingTool  # Ensure OllamaEmbeddings is imported correctly
+from prompts import remove_irrelevant_content_prompt
+from langchain_core.prompts import PromptTemplate
+from langchain_ollama import ChatOllama
+from model.relevant_content_model import RelevantContent
+
 
 class VectorStore:
     def __init__(self):
@@ -15,16 +20,21 @@ class VectorStore:
         self.chunk_retriever = None
         self.quote_retriever = None
         self.embedder = EmbeddingTool()
+        self.llm = None
 
 
-    def _initialize_vectorstore(self, embeddings=OllamaEmbeddings(model="llama3.1")):
+    def _initialize_vectorstore(self, llm: ChatOllama, embeddings=OllamaEmbeddings(model="llama3.1")):
         try:
+            self.llm = llm
+
+            # Initialize the vectorstore for storing chunks of text
             self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
                 persist_directory="./chroma_db"
             )
             self.chunk_retriever = self.chunk_vectorstore.as_retriever()
 
+            #Initialize the vectorstore for storing quotes
             self.quote_vectorstore = Chroma(
                 embedding_function=embeddings,
                 persist_directory="./quote_chroma_db"
@@ -43,21 +53,6 @@ class VectorStore:
             self.chunk_retriever = None
 
 
-    def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
-        logger.info("  |  Retrieving quotes...")
-        all_docs = []
-        for i, query in enumerate(queries):
-            try:
-                found_docs = self.quote_retriever.invoke(query) if retriever == "chunk" else self.quote_retriever.invoke(query)
-                all_docs.extend(found_docs)
-                logger.debug(f"  |  Query {i+1}: Retrieved {len(found_docs)} documents")
-                
-                return get_unique_union([all_docs])
-            
-            except Exception as e:
-                logger.error(f"Error retrieving for query {i+1}: {e}", exc_info=True)
-
-        
     def add_document_to_store(self, filename: str):
         logger.info(f"Embedding document: {filename}")
         try:
@@ -74,3 +69,38 @@ class VectorStore:
 
         except Exception as e:
             logger.error(f"Error embedding document {filename}: {e}", exc_info=True)
+
+
+    def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
+        logger.info("  |  Retrieving quotes...")
+        all_docs = []
+        for i, query in enumerate(queries):
+            try:
+                found_docs = self.quote_retriever.invoke(query) if retriever == "chunk" else self.quote_retriever.invoke(query)
+                relevant_docs = self.remove_irrelevant_content(query, found_docs)
+                all_docs.extend(relevant_docs.relevant_content)
+                logger.debug(f"  |  Query {i+1}: Retrieved {len(found_docs)} documents")
+                
+            except Exception as e:
+                logger.error(f"Error retrieving for query {i+1}: {e}", exc_info=True)
+
+        return get_unique_union(all_docs)
+
+
+    def remove_irrelevant_content(self, query: str, retrieved_documents: list[Document]) -> RelevantContent:
+        keep_only_relevant_content_chain = PromptTemplate(
+            template=remove_irrelevant_content_prompt,
+            input_variables=["query", "retrieved_documents"],
+        ) | self.llm.with_structured_output(RelevantContent)
+        
+        relevant_content_obj: RelevantContent = keep_only_relevant_content_chain.invoke({
+            "query": query,
+            "retrieved_documents": retrieved_documents
+        })
+
+        relevant_content_obj.relevant_content = "".join(relevant_content_obj)
+
+        return relevant_content_obj \
+            .relevant_content \
+            .replace('"', '\\"') \
+            .replace("'", "\\'")

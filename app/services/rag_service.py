@@ -7,11 +7,17 @@ from app.tools.query_augmentation_tool import QueryAugmentationTool
 from langchain_ollama import ChatOllama
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
+from model.relevant_content_model import RelevantContent
+from tools.planning_tool import PlanningTool
+from langchain_core.prompts import PromptTemplate
+from model.anonymize_model import DeanonymizedPlan
 
 class RagChain:
     def __init__(self):
         self.vectorstore = VectorStore()
+        self.planning_tool = PlanningTool(llm=ChatOllama(model="llama3.1"))
         self.question = None
+        self.plan_obj = None
         self.queries = []
         self.llm = None
         logger.info("-->  Executing RAG Chain:")
@@ -25,6 +31,21 @@ class RagChain:
         return self
     
     def use_anonymized_planning(self):
+        anonymized_question = self.planning_tool.anonymize_question(self.question)
+        anonymized_plan = self.planning_tool.create_initial_plan(anonymized_question.question)
+        self.plan_obj: DeanonymizedPlan = self.planning_tool.deanonymize_plan(
+            plan=anonymized_plan.steps,
+            mapping=anonymized_question.mapping
+        )
+        
+        self.queries = self.planning_tool.create_queries_from_plan(
+            question=self.question,
+            plan=self.plan_obj.plan
+        )
+
+        logger.info(f"  |  Anonymized question: {anonymized_question.question}")
+        logger.info(f"  |  Generated plan: {self.plan_obj.plan}")
+        
         return self
 
     def use_multi_querying(self, prompt):
@@ -53,18 +74,37 @@ class RagChain:
         if not self.queries:
             logger.info("No queries generated, generating now...")
             self.use_multi_querying(self.question)
-            
+
         try:
-            retrieved_docs: list[Document] = self.vectorstore.search_for_documents(queries=self.queries, k=5)
-            context = "\n\n".join([doc.page_content for doc in retrieved_docs[:5]])  # Limit context
-            llm_prompt = ChatPromptTemplate.from_template(prompt)
-            
-            logger.info("  |  Generating final answer...")
-            final_chain = llm_prompt | self.llm.with_structured_output(RAGResponse)
+            retrieved_chunks: list[Document] = self.vectorstore \
+                .search_for_documents(
+                    queries=self.queries, 
+                    retriever="chunk",
+                    k=5
+                )
+            retrieved_quotes: list[Document] = self.vectorstore \
+                .search_for_documents(
+                    queries=self.queries, 
+                    retriever="quote",
+                    k=5
+                )
+            docs = retrieved_chunks + retrieved_quotes
+
+            relevant_docs: RelevantContent = self.vectorstore.remove_irrelevant_content(
+                query=self.question, 
+                retrieved_documents=docs
+            )
+
+            final_chain = PromptTemplate(
+                input_variables=["context", "plan", "question", "generated_queries"],
+                template=prompt
+            ) | self.llm.with_structured_output(RAGResponse)
      
             answer = final_chain.invoke({
-                "context": context,
-                "question": self.question
+                "context": relevant_docs.relevant_content,
+                "plan": self.plan_obj.plan,
+                "question": self.question,
+                "generated_queries": self.queries
             })
             
             logger.info(f"<--  Final answer:\n{{{answer}}}")

@@ -92,6 +92,62 @@ Original question: {question}
 Generate five strategic query variants (one per line):
 """
 
+query_optimization_prompt = """
+You are an expert at rewriting user queries to optimize them for semantic similarity search in vector databases.
+Transform the user's query into a single optimized version that:
+
+- Uses semantically rich terminology while maintaining the original intent
+- Includes relevant keywords and synonyms that might appear in documents
+- Converts questions to declarative statements when appropriate
+- Adds implicit context that users might assume
+- Uses terminology that commonly appears in documentation
+
+Rewrite this query: {query}
+"""
+
+queries_from_plan_prompt = """
+Instructions:
+You are an expert at translating steps of an information retrieval plan into precise vector database queries. Your goal is to generate optimal search queries that will retrieve the information needed to complete each step of the given plan.
+
+Original Question: {question}
+Plan: {plan}
+
+For each step in the plan, generate 1-3 specific queries that would retrieve the relevant information from a vector database. 
+
+Guidelines:
+- Queries should be specific and focused on retrieving factual information
+- Use natural language that would match how information is typically written/stored
+- Consider synonyms and alternative phrasings for key concepts
+- Each query should target a specific piece of information needed for that step
+- Prioritize precision over broad coverage - better to have focused queries than overly general ones
+
+Example:
+Original Question: Does the statement from politician X match with current party Y line?
+Plan:
+1. Determine what party politician Jonas Gahr Støre belongs to
+2. Identify the current official positions/policies of party AP
+3. Compare the politician's statement with party positions
+
+Step 1: Determine what party politician Jonas Gahr Støre belongs to
+Queries:
+- What party does politician Jonas Gahr Støre belong to
+- Politician Jonas Gahr Støre party affiliation
+- Jonas Gahr Støre political party membership
+
+Step 2: Identify the current official positions/policies of party AP
+Queries:
+- Party AP official platform positions
+- Current policy positions of party AP
+- Party AP stance on [relevant topic from statement
+
+Step 3: Compare the politician's statement with party positions
+Queries:
+- Party AP position on [specific topic from statement]
+- Official party AP policy regarding [statement topic]
+
+Respond only with the structured output as specified.
+"""
+
 # ANALYSIS ---------------------------------------------------------------------------------------------------------
 
 analysis_prompt = """
@@ -102,8 +158,14 @@ Your task is to analyze whether a political action or vote aligns with the party
 CONTEXT (extracted from relevant documents):  
 {context}
 
+PLAN (This plan was generated to answer the question, use it to understand the context of the question before answering):
+{plan}
+
 QUESTION/ANALYSIS:  
 {question}
+
+GENERATED QUERIES (these queries were used in the retrieval process to gather context):
+{generated_queries}
 
 ANALYSIS INSTRUCTIONS:  
 1. Thoroughly analyze the given political action or vote  
@@ -129,7 +191,16 @@ IMPORTANT CONSIDERATIONS:
 - Context and timing can influence decisions  
 - Distinguish between tactical and principled decisions  
 
-Based on the context and your expertise in Norwegian politics, provide your structured analysis of whether the political action aligns with the party’s official line.
-
+Based on the context and your expertise in Norwegian politics, provide your structured analysis of whether or not the political action aligns with the party’s official line.
+Base your response on the information provided in the context and the plan and do not add any new information that is not in the context. If the context does not provide enough information to make a judgment, state that clearly.
 Respond only with the structured output as specified.
+"""
+
+remove_irrelevant_content_prompt = """
+You receive a query: {query} and retrieved documents: {retrieved_documents} from a vector store.
+You need to filter out all the non-relevant information that does not supply important information regarding the {query}.
+Your goal is to filter out the non-relevant information only.
+You can remove parts of sentences that are not relevant to the query or remove whole sentences that are not relevant to the query.
+DO NOT ADD ANY NEW INFORMATION THAT IS NOT IN THE RETRIEVED DOCUMENTS.
+Output the filtered relevant content.
 """
