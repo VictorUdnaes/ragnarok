@@ -6,7 +6,13 @@ from model.anonymize_model import AnonymizedQuestion
 # Setup
 llm = ChatOllama(model="llama3.1", temperature=0)
 planner = PlanningTool(llm)
-question = {"question": "What is the capital of the country of France?"}
+from planning_tool import PlanningTool
+from app.openai_config import openapi_client
+
+# Setup model variables and connection string
+question = "Når går Venstre inn for å inkludere omskjæring i en lov mot omskjæring av kvinner?"
+
+llm = openapi_client()
 
 anonymized_question: AnonymizedQuestion = planner.anonymize_question(question)
 

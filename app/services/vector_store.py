@@ -1,17 +1,18 @@
 from langchain_community.document_loaders import JSONLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings  # Changed to Ollama
+from langchain_openai import OpenAIEmbeddings
 from pathlib import Path
 from langchain.docstore.document import Document
 from utils.rag_util import get_unique_union
 from utils.logger import logger  # Import the logger
-from embedding.embedding_tool import EmbeddingTool  # Ensure OllamaEmbeddings is imported correctly
+from tools.embedding_tool import EmbeddingTool
 from prompts import remove_irrelevant_content_prompt
 from langchain_core.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from model.relevant_content_model import RelevantContent
-
+from fastapi import UploadFile
+from langchain_ollama import OllamaEmbeddings
 
 class VectorStore:
     def __init__(self):
@@ -23,21 +24,21 @@ class VectorStore:
         self.llm = None
 
 
-    def _initialize_vectorstore(self, llm: ChatOllama, embeddings=OllamaEmbeddings(model="llama3.1")):
-        try:
+    def _initialize_vectorstore(self, llm: ChatOpenAI, embeddings=OllamaEmbeddings(model="llama3.1")):
+        try:            
             self.llm = llm
 
             # Initialize the vectorstore for storing chunks of text
             self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
-                persist_directory="./chroma_db"
+                persist_directory="./chroma/chunk_chroma_db"
             )
             self.chunk_retriever = self.chunk_vectorstore.as_retriever()
 
             #Initialize the vectorstore for storing quotes
             self.quote_vectorstore = Chroma(
                 embedding_function=embeddings,
-                persist_directory="./quote_chroma_db"
+                persist_directory="./chroma/quote_chroma_db"
             )
             self.quote_retriever = self.quote_vectorstore.as_retriever()
 
@@ -52,23 +53,35 @@ class VectorStore:
             logger.error(f"Error initializing vectorstore: {e}", exc_info=True)
             self.chunk_retriever = None
 
-
-    def add_document_to_store(self, filename: str):
-        logger.info(f"Embedding document: {filename}")
+    # Endre så den tar embedding pattern som parameter
+    def add_document_to_store(self, embedding_type: str, file: UploadFile):
+        logger.info(f"Embedding document: {file.filename}")
         try:
-            current_dir = Path(__file__).parent
-            path: str = current_dir.parent / 'documents' / filename
-
             text_chunks = self.embedder.create_chunks_from_document(
-                document_path=path,
+                file=file,
                 chunk_size=1000
             )
 
-            self.chunk_vectorstore.add_documents(text_chunks)
-            logger.info(f"Document {filename} embedded and added to vectorstore successfully")
+            text_quotes = self.embedder.create_chunks_from_pattern(
+                file=file,
+                pattern=r'Venstre (?:vil|ønsker)[^.]*\.'
+            )
+            self.quote_vectorstore.add_documents(text_quotes)
+
+            if embedding_type == "both":
+                self.chunk_vectorstore.add_documents(text_chunks)
+                self.quote_vectorstore.add_documents(text_quotes)
+
+            elif embedding_type == "chunk":
+                self.chunk_vectorstore.add_documents(text_chunks)
+
+            elif embedding_type == "quote":
+                self.chunk_vectorstore.add_documents(text_quotes)
+
+            logger.info(f"Document {file.filename} embedded and added to vectorstore successfully")
 
         except Exception as e:
-            logger.error(f"Error embedding document {filename}: {e}", exc_info=True)
+            logger.error(f"Error embedding document {file.filename}: {e}", exc_info=True)
 
 
     def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:

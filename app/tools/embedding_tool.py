@@ -1,15 +1,16 @@
 import re
-import PyPDF2
 from langchain.docstore.document import Document
 import spacy
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from fastapi import UploadFile
+import pdfplumber
 
 class EmbeddingTool():
     def __init__(self):
-        self.nlp = spacy.load("nb_core_news_sm")  # Load once to avoid repeated loading
+        self.nlp = spacy.load("nb_core_news_sm")
 
-    def create_chunks_from_document(self, document_path: str, chunk_size: int = 1000) -> list[Document]:
-        text_from_document = self.get_document_as_text(document_path)
+    def create_chunks_from_document(self, file: UploadFile, chunk_size: int = 1000) -> list[Document]:
+        text_from_document = self.get_document_as_text(file)
         text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size,
                 chunk_overlap=200
@@ -19,9 +20,10 @@ class EmbeddingTool():
         
         return document_chunks
     
-    def create_chunks_from_pattern(self, text: str, pattern: str) -> list[Document]:
+    def create_chunks_from_pattern(self, file: UploadFile, pattern: str) -> list[Document]:
+        text_from_document = self.get_document_as_text(file)
         regex = re.compile(pattern)
-        chunks = regex.findall(text)
+        chunks = regex.findall(text_from_document)
         document_chunks = [Document(page_content=chunk) for chunk in chunks]
 
         return document_chunks
@@ -78,9 +80,10 @@ class EmbeddingTool():
         
         return text
     
-    def get_document_as_text(self, document_path) -> str:
-        with open(document_path, 'rb') as pdf_file:
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
-            full_text = " ".join([page.extract_text() for page in pdf_reader.pages])
+    def get_document_as_text(self, file: UploadFile) -> str:
+        text = ""
+        with pdfplumber.open(file.file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text()
 
-        return full_text
+        return text

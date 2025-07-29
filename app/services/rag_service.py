@@ -1,21 +1,24 @@
-from langchain_ollama import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
 from utils.logger import logger
-from app.model.response_model import RAGResponse
-from app.tools.query_augmentation_tool import QueryAugmentationTool
-from langchain_ollama import ChatOllama
+from model.response_model import RAGResponse
+from tools.query_augmentation_tool import QueryAugmentationTool
+from openai_config import openapi_client
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from model.relevant_content_model import RelevantContent
 from tools.planning_tool import PlanningTool
 from langchain_core.prompts import PromptTemplate
 from model.anonymize_model import DeanonymizedPlan
+from langchain_openai import ChatOpenAI
 
-class RagChain:
+
+class RagService:
     def __init__(self):
         self.vectorstore = VectorStore()
-        self.planning_tool = PlanningTool(llm=ChatOllama(model="llama3.1"))
+        openai_llm = None
+        self.planning_tool = PlanningTool(llm=openai_llm)
         self.question = None
         self.plan_obj = None
         self.queries = []
@@ -54,17 +57,25 @@ class RagChain:
 
         return self
 
-    def with_llm(self, model_name="llama", temperature=0):
+    def with_llm(self, model: ChatOpenAI, temperature=0):
         try:
-            logger.info(f"  |  Initializing LLM with model: {model_name}")
-            self.llm = ChatOllama(model=model_name, temperature=temperature)
-            embedding = OllamaEmbeddings(model=model_name)
-            self.vectorstore._initialize_vectorstore(embeddings=embedding)
+            logger.info(f"  |  Initializing LLM with OpenAI model: {model.model_name}")
+            self.llm = model
+            embedding = OpenAIEmbeddings()
+            self.vectorstore._initialize_vectorstore(llm=self.llm, embeddings=embedding)
 
         except Exception as e:
             logger.info(f"✗ Error initializing LLM: {e}")
             self.llm = None
 
+        return self
+    
+    def with_vectorstore(self, vectorstore: VectorStore):
+        if not isinstance(vectorstore, VectorStore):
+            raise ValueError("Provided vectorstore is not an instance of VectorStore")
+        
+        self.vectorstore = vectorstore
+        logger.info("  |  Using provided vectorstore")
         return self
 
     def run(self, prompt) -> RAGResponse:
