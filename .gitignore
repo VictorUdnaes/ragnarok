@@ -3,3 +3,5 @@ app/chroma_db/
 .vscode
 application.log
 __pycache__/
+venv/
+app/openai_config.py
