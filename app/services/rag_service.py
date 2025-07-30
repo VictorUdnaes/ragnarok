@@ -1,7 +1,7 @@
+import logging
 from langchain_openai import OpenAIEmbeddings
 from services.vector_store import VectorStore
 from utils.rag_util import sanitize_response
-from utils.logger import logger
 from model.response_model import RAGResponse
 from tools.query_augmentation_tool import QueryAugmentationTool
 from openai_config import openapi_client
@@ -12,117 +12,137 @@ from tools.planning_tool import PlanningTool
 from langchain_core.prompts import PromptTemplate
 from model.anonymize_model import DeanonymizedPlan
 from langchain_openai import ChatOpenAI
+from langchain_ollama import OllamaEmbeddings
+from model.plan_model import Plan
 
+
+logger = logging.getLogger("ApplicationService")
 
 class RagService:
     def __init__(self):
         self.vectorstore = VectorStore()
-        openai_llm = None
-        self.planning_tool = PlanningTool(llm=openai_llm)
+        self.planning_tool = None
         self.question = None
         self.plan_obj = None
         self.queries = []
         self.llm = None
-        logger.info("-->  Executing RAG Chain:")
-    
-    def with_question(self, question):
-        if not question:
-            raise ValueError("Question cannot be empty")
-        
-        logger.info(f"  |  Question: {question}")
-        self.question = question
-        return self
-    
-    def use_anonymized_planning(self):
-        anonymized_question = self.planning_tool.anonymize_question(self.question)
-        anonymized_plan = self.planning_tool.create_initial_plan(anonymized_question.question)
-        self.plan_obj: DeanonymizedPlan = self.planning_tool.deanonymize_plan(
-            plan=anonymized_plan.steps,
-            mapping=anonymized_question.mapping
-        )
-        
-        self.queries = self.planning_tool.create_queries_from_plan(
-            question=self.question,
-            plan=self.plan_obj.plan
-        )
+        self.should_use_anonymized_planning = False
+        logger.info("RAGService initialized.")
 
-        logger.info(f"  |  Anonymized question: {anonymized_question.question}")
-        logger.info(f"  |  Generated plan: {self.plan_obj.plan}")
-        
-        return self
-
-    def use_multi_querying(self, prompt):
-        self.queries = QueryAugmentationTool.generate_multiple_queries(llm=self.llm, question=self.question, prompt=prompt)
-        logger.info(f"  |  Generated {len(self.queries)} query perspectives")
-
-        return self
-
-    def with_llm(self, model: ChatOpenAI, temperature=0):
+    def with_llm(self, model: ChatOpenAI, embeddings: OllamaEmbeddings, temperature=0):
         try:
-            logger.info(f"  |  Initializing LLM with OpenAI model: {model.model_name}")
+            logger.info(f"Configuring LLM with model: {model.model_name}")
             self.llm = model
-            embedding = OpenAIEmbeddings()
-            self.vectorstore._initialize_vectorstore(llm=self.llm, embeddings=embedding)
-
+            self.planning_tool = PlanningTool(llm=self.llm)
+            self.vectorstore._initialize_vectorstore(llm=self.llm, embeddings=embeddings)
         except Exception as e:
-            logger.info(f"✗ Error initializing LLM: {e}")
+            logger.error(f"Error configuring LLM: {e}")
             self.llm = None
-
         return self
-    
+
     def with_vectorstore(self, vectorstore: VectorStore):
         if not isinstance(vectorstore, VectorStore):
+            logger.error("Provided vectorstore is not an instance of VectorStore.")
             raise ValueError("Provided vectorstore is not an instance of VectorStore")
-        
+
         self.vectorstore = vectorstore
-        logger.info("  |  Using provided vectorstore")
+        logger.info("Vectorstore configured successfully.")
         return self
+
+    def with_anonymized_planning(self):
+        self.should_use_anonymized_planning = True
+        logger.info("Anonymized planning enabled.")
+        return self
+
+    def with_question(self, question):
+        if not question:
+            logger.error("Question cannot be empty.")
+            raise ValueError("Question cannot be empty")
+
+        self.question = question
+        logger.info(f"Question set: {question}")
+        return self
+
+    def create_queries_from_plan(self):
+        try:
+            logger.info("Creating queries from plan.")
+            anonymized_question_obj = self.planning_tool.anonymize_question(self.question)
+            anonymized_plan = self.planning_tool.create_initial_plan(anonymized_question_obj.anonymized_question)
+            
+            self.plan_obj: Plan = self.planning_tool.deanonymize_plan(
+                plan=anonymized_plan.steps,
+                mapping=anonymized_question_obj.mapping
+            )
+
+            logger.info(f"Plan created with {len(self.plan_obj.steps)} steps: {self.plan_obj.steps}")
+
+            queries_obj = self.planning_tool.create_queries_from_plan(
+                question=self.question,
+                plan=self.plan_obj
+            )
+
+            self.queries = queries_obj.queries
+
+            logger.info(f"Generated {len(self.queries)} queries from plan.")
+            logger.info(f"Generated queries: {self.queries}")
+        except Exception as e:
+            logger.error(f"Error creating queries from plan: {e}")
+            raise
+
+    def generate_multiple_queries(self, prompt):
+        self.queries = QueryAugmentationTool.generate_multiple_queries(llm=self.llm, question=self.question, prompt=prompt)
+
 
     def run(self, prompt) -> RAGResponse:
         if not self.llm:
             return "Error: LLM not available"
-        
-        if not self.queries:
-            logger.info("No queries generated, generating now...")
-            self.use_multi_querying(self.question)
 
         try:
+            logger.info("Executing RAG chain.")
+
+            if self.should_use_anonymized_planning:
+                self.create_queries_from_plan()
+            else:
+                self.queries = [self.question]
+
             retrieved_chunks: list[Document] = self.vectorstore \
                 .search_for_documents(
                     queries=self.queries, 
                     retriever="chunk",
                     k=5
                 )
+            logger.info(f"Retrieved {len(retrieved_chunks)} chunk documents.")
             retrieved_quotes: list[Document] = self.vectorstore \
                 .search_for_documents(
                     queries=self.queries, 
                     retriever="quote",
                     k=5
                 )
+            logger.info(f"Retrieved {len(retrieved_quotes)} quote documents.")
             docs = retrieved_chunks + retrieved_quotes
-
-            relevant_docs: RelevantContent = self.vectorstore.remove_irrelevant_content(
-                query=self.question, 
+            logger.info(f"Retrieved {len(docs)} documents from vectorstore: {docs}")
+            """
+            relevant_content_as_string: str = self.vectorstore.remove_irrelevant_content(
+                queries=self.queries, 
                 retrieved_documents=docs
             )
-
+            logger.info("Content retrieved: %s", relevant_content_as_string)
+            """
             final_chain = PromptTemplate(
-                input_variables=["context", "plan", "question", "generated_queries"],
+                input_variables=["context", "plan", "original_question", "generated_queries_from_plan"],
                 template=prompt
             ) | self.llm.with_structured_output(RAGResponse)
      
             answer = final_chain.invoke({
-                "context": relevant_docs.relevant_content,
-                "plan": self.plan_obj.plan,
-                "question": self.question,
-                "generated_queries": self.queries
+                "context": docs,
+                "plan": self.plan_obj.steps,
+                "original_question": self.question,
+                "generated_queries_from_plan": self.queries
             })
             
-            logger.info(f"<--  Final answer:\n{{{answer}}}")
-            
+            logger.info("RAG chain executed successfully.")
             return answer
             
         except Exception as e:
-            error_msg = f"Error executing RAG chain: {e}"
-            logger.error(error_msg)
-            return error_msg
+            logger.error(f"Error executing RAG chain: {e}")
+            raise

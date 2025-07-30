@@ -5,7 +5,6 @@ from langchain_openai import OpenAIEmbeddings
 from pathlib import Path
 from langchain.docstore.document import Document
 from utils.rag_util import get_unique_union
-from utils.logger import logger  # Import the logger
 from tools.embedding_tool import EmbeddingTool
 from prompts import remove_irrelevant_content_prompt
 from langchain_core.prompts import PromptTemplate
@@ -13,6 +12,9 @@ from langchain_openai import ChatOpenAI
 from model.relevant_content_model import RelevantContent
 from fastapi import UploadFile
 from langchain_ollama import OllamaEmbeddings
+import logging
+
+logger = logging.getLogger("ApplicationService")
 
 class VectorStore:
     def __init__(self):
@@ -22,12 +24,14 @@ class VectorStore:
         self.quote_retriever = None
         self.embedder = EmbeddingTool()
         self.llm = None
+        logger.info("VectorStore initialized.")
 
 
-    def _initialize_vectorstore(self, llm: ChatOpenAI, embeddings=OllamaEmbeddings(model="llama3.1")):
+    def _initialize_vectorstore(self, llm: ChatOpenAI, embeddings=OllamaEmbeddings(model="mxbai-embed-large")):
         try:            
             self.llm = llm
 
+            logger.info("Initializing vectorstore.")
             # Initialize the vectorstore for storing chunks of text
             self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
@@ -44,19 +48,20 @@ class VectorStore:
 
             test_results = self.chunk_vectorstore.similarity_search("test", k=1)
             if test_results:
-                logger.info(f"  |  Vectorstore initialized successfully")
+                pass
             else:
-                logger.warning("⚠ Vectorstore initialized but no documents found")
-                logger.info("Use add_documents_to_vectorstore() to add documents first")
+                pass
 
+            logger.info("Vectorstore initialized successfully.")
         except Exception as e:
-            logger.error(f"Error initializing vectorstore: {e}", exc_info=True)
+            logger.error(f"Error initializing vectorstore: {e}")
             self.chunk_retriever = None
+            raise
 
     # Endre så den tar embedding pattern som parameter
     def add_document_to_store(self, embedding_type: str, file: UploadFile):
-        logger.info(f"Embedding document: {file.filename}")
         try:
+            logger.info(f"Adding document to vectorstore: {file.filename}")
             text_chunks = self.embedder.create_chunks_from_document(
                 file=file,
                 chunk_size=1000
@@ -78,42 +83,35 @@ class VectorStore:
             elif embedding_type == "quote":
                 self.chunk_vectorstore.add_documents(text_quotes)
 
-            logger.info(f"Document {file.filename} embedded and added to vectorstore successfully")
-
+            logger.info(f"Document {file.filename} added successfully.")
         except Exception as e:
-            logger.error(f"Error embedding document {file.filename}: {e}", exc_info=True)
+            logger.error(f"Error adding document {file.filename} to vectorstore: {e}")
+            raise
 
 
     def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
-        logger.info("  |  Retrieving quotes...")
         all_docs = []
         for i, query in enumerate(queries):
             try:
                 found_docs = self.quote_retriever.invoke(query) if retriever == "chunk" else self.quote_retriever.invoke(query)
                 relevant_docs = self.remove_irrelevant_content(query, found_docs)
                 all_docs.extend(relevant_docs.relevant_content)
-                logger.debug(f"  |  Query {i+1}: Retrieved {len(found_docs)} documents")
                 
             except Exception as e:
-                logger.error(f"Error retrieving for query {i+1}: {e}", exc_info=True)
+                pass
 
         return get_unique_union(all_docs)
 
 
-    def remove_irrelevant_content(self, query: str, retrieved_documents: list[Document]) -> RelevantContent:
+    def remove_irrelevant_content(self, queries: list[str], retrieved_documents: list[Document]) -> str:
         keep_only_relevant_content_chain = PromptTemplate(
             template=remove_irrelevant_content_prompt,
-            input_variables=["query", "retrieved_documents"],
+            input_variables=["queries", "retrieved_documents"],
         ) | self.llm.with_structured_output(RelevantContent)
         
         relevant_content_obj: RelevantContent = keep_only_relevant_content_chain.invoke({
-            "query": query,
+            "queries": queries,
             "retrieved_documents": retrieved_documents
         })
 
-        relevant_content_obj.relevant_content = "".join(relevant_content_obj)
-
-        return relevant_content_obj \
-            .relevant_content \
-            .replace('"', '\\"') \
-            .replace("'", "\\'")
+        return relevant_content_obj.relevant_content_as_string  

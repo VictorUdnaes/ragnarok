@@ -3,6 +3,7 @@ from pydantic import BaseModel, field_validator, ValidationError
 class RAGResponse(BaseModel):
     does_match: bool
     explanation: str
+    relevant_context: list[str]
 
     @field_validator('does_match')
     def validate_boolean(cls, value):

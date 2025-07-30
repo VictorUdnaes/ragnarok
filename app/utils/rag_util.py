@@ -12,7 +12,6 @@ def get_unique_union(documents: list[list]):
             # Return
             return [loads(doc) for doc in unique_docs]
     except Exception as e:
-        print(f"Error in get_unique_union: {e}")
         return []
     
 def sanitize_response(response):

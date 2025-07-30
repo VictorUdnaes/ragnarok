@@ -107,7 +107,7 @@ Rewrite this query: {query}
 
 queries_from_plan_prompt = """
 Instructions:
-You are an expert at translating steps of an information retrieval plan into precise vector database queries. Your goal is to generate optimal search queries that will retrieve the information needed to complete each step of the given plan.
+You are an expert at translating steps of an information retrieval plan into precise vector database queries in Norwegian. Your goal is to generate optimal search queries that will retrieve the information needed to complete each step of the given plan.
 
 Original Question: {question}
 Plan: {plan}
@@ -145,7 +145,7 @@ Queries:
 - Party AP position on [specific topic from statement]
 - Official party AP policy regarding [statement topic]
 
-Respond only with the structured output as specified.
+Respond only with the structured output as specified and every query should be in Norwegian.
 """
 
 # ANALYSIS ---------------------------------------------------------------------------------------------------------
@@ -162,10 +162,10 @@ PLAN (This plan was generated to answer the question, use it to understand the c
 {plan}
 
 QUESTION/ANALYSIS:  
-{question}
+{original_question}
 
 GENERATED QUERIES (these queries were used in the retrieval process to gather context):
-{generated_queries}
+{generated_queries_from_plan}
 
 ANALYSIS INSTRUCTIONS:  
 1. Thoroughly analyze the given political action or vote  
@@ -194,13 +194,25 @@ IMPORTANT CONSIDERATIONS:
 Based on the context and your expertise in Norwegian politics, provide your structured analysis of whether or not the political action aligns with the party’s official line.
 Base your response on the information provided in the context and the plan and do not add any new information that is not in the context. If the context does not provide enough information to make a judgment, state that clearly.
 Respond only with the structured output as specified.
+
+IMPORTANT:
+- Do not add any new information that is not in the context
+- Do not make assumptions beyond what is provided in the context
+- Your response should be translated to Norwegian.
+
+You will add the relevant text chunks you have used to answer the question in the "relevant_context" field. This should be a list of strings, each string being a relevant text chunk that you have used to answer the question.
+You shall not change the text chunks in any way, just add them as they are and they should be in Norwegian.
 """
 
 remove_irrelevant_content_prompt = """
-You receive a query: {query} and retrieved documents: {retrieved_documents} from a vector store.
-You need to filter out all the non-relevant information that does not supply important information regarding the {query}.
+You are an expert in filtering relevant content from retrieved documents based on specific queries.
+Your task is to extract only the relevant information that directly addresses the queries provided.
+
+You receive a list of queries: {queries} and retrieved documents: {retrieved_documents} from a vector store.
+You need to filter out all the non-relevant information that does not supply important information regarding the {queries}.
 Your goal is to filter out the non-relevant information only.
-You can remove parts of sentences that are not relevant to the query or remove whole sentences that are not relevant to the query.
+You can remove parts of sentences that are not relevant to the queries or remove whole sentences that are not relevant to the queries.
+
 DO NOT ADD ANY NEW INFORMATION THAT IS NOT IN THE RETRIEVED DOCUMENTS.
-Output the filtered relevant content.
+Output the filtered relevant content as a single string.
 """

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 class AnonymizedQuestion(BaseModel):
-    question: str
+    anonymized_question: str
     mapping: dict
     explaination: str
 

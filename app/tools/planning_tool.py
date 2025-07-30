@@ -24,16 +24,16 @@ class PlanningTool:
             .invoke(input=question)
 
 
-    def deanonymize_plan(self, plan: str, mapping:str) -> DeanonymizedPlan:
+    def deanonymize_plan(self, plan: str, mapping:str) -> Plan:
         return self \
-            .build_chain(["plan", "mapping"], deanonymize_prompt, DeanonymizedPlan) \
+            .build_chain(["plan", "mapping"], deanonymize_prompt, Plan) \
             .invoke({
                 "plan": plan,
                 "mapping": mapping
             })
     
 
-    def create_queries_from_plan(self, question: str, plan: Plan) -> list[str]:
+    def create_queries_from_plan(self, question: str, plan: Plan) -> QueriesFromPlan:
         return self \
             .build_chain(["question", "plan"], queries_from_plan_prompt, QueriesFromPlan) \
             .invoke({
