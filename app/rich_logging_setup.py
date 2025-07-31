@@ -42,29 +42,80 @@ class IndentedFormatter(logging.Formatter):
     def __init__(self, fmt):
         super().__init__(fmt)
         self.base_fmt = fmt
+        # Calculate the prefix length (logger name field width + spacing)
+        self.prefix_length = 26  # 25 chars for logger name + 1 space
     
     def format(self, record):
-        message = record.getMessage().strip()
+        original_message = record.getMessage()
+        message = original_message.strip()
         
-        # Check if this is a request start (LoggingAspect with -->)
-        if record.name == "LoggingAspect" and message.startswith('-->'):
-            IndentedFormatter._inside_request = True
-            return super().format(record)
+        # Pre-process multi-line messages to add proper indentation
+        processed_message = self._preprocess_multiline_message(original_message)
         
-        # Check if this is a request end (LoggingAspect with <--)
-        elif record.name == "LoggingAspect" and message.startswith('<--'):
-            IndentedFormatter._inside_request = False
-            return super().format(record)
+        # Temporarily replace the record's message with our processed version
+        original_msg = record.msg
+        original_args = record.args
+        record.msg = processed_message
+        record.args = ()
         
-        # If we're inside a request, indent all messages (except empty ones)
-        elif IndentedFormatter._inside_request and message:
-            indented_fmt = self.base_fmt.replace('%(message)s', '    %(message)s')
-            formatter = logging.Formatter(indented_fmt)
-            return formatter.format(record)
+        try:
+            # Check if this is a request start (LoggingAspect with -->)
+            if record.name == "LoggingAspect" and message.startswith('-->'):
+                IndentedFormatter._inside_request = True
+                return super().format(record)
+            
+            # Check if this is a request end (LoggingAspect with <--)
+            elif record.name == "LoggingAspect" and message.startswith('<--'):
+                IndentedFormatter._inside_request = False
+                return super().format(record)
+            
+            # If we're inside a request, indent all messages (except empty ones)
+            elif IndentedFormatter._inside_request and message:
+                # Add request indentation to the processed message
+                indented_message = self._add_request_indentation(processed_message)
+                record.msg = indented_message
+                return super().format(record)
+            
+            # Default formatting for everything else
+            else:
+                return super().format(record)
+        finally:
+            # Restore original record state
+            record.msg = original_msg
+            record.args = original_args
+    
+    def _preprocess_multiline_message(self, message):
+        """Pre-process multi-line messages to add proper continuation indentation"""
+        lines = message.split('\n')
+        if len(lines) <= 1:
+            return message
         
-        # Default formatting for everything else
-        else:
-            return super().format(record)
+        # Keep the first line as is
+        result = [lines[0]]
+        
+        # For continuation lines, add proper spacing to align with the message content
+        continuation_indent = ' ' * self.prefix_length
+        
+        for line in lines[1:]:
+            if line.strip():  # Only add indentation to non-empty lines
+                result.append(continuation_indent + line.strip())
+            else:
+                result.append('')  # Keep empty lines empty
+        
+        return '\n'.join(result)
+    
+    def _add_request_indentation(self, message):
+        """Add request-level indentation (4 spaces) to all lines of the message"""
+        lines = message.split('\n')
+        result = []
+        
+        for line in lines:
+            if line.strip():  # Only add indentation to non-empty lines
+                result.append('    ' + line)
+            else:
+                result.append(line)  # Keep empty lines as they are
+        
+        return '\n'.join(result)
 
 class RichLoggingSetup:
     """Rich logging configuration for FastAPI"""
@@ -112,11 +163,12 @@ class RichLoggingSetup:
         # Silence noisy loggers
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)  # Silence access logs
     
     def log_startup_banner(self):
         """Display a beautiful startup banner"""
         startup_panel = Panel.fit(
-            "[bold green]🚀 FastAPI Application[/bold green]\n"
+            "[bold green]🚀 RAG Application[/bold green]\n"
             "[blue]Starting up with Rich logging...[/blue]",
             title="[bold magenta]STARTUP[/bold magenta]",
             border_style="green"
@@ -136,6 +188,7 @@ class RichLoggingMiddleware(BaseHTTPMiddleware):
         start_time = time.time()
         
         # Log incoming request - clear request start
+        self.logger.info("")
         self.logger.info(f"[bold blue]-->[/bold blue] [green][{request.method}][/green] [cyan]{request.url.path}[/cyan]")
         
         try:
@@ -152,6 +205,7 @@ class RichLoggingMiddleware(BaseHTTPMiddleware):
             else:
                 status_color = "red"
             
+            self.logger.info("")
             # Response log
             self.logger.info(f"[yellow]Response:[/yellow] [bold]<{response.status_code} OK>[/bold]")
             
@@ -160,9 +214,6 @@ class RichLoggingMiddleware(BaseHTTPMiddleware):
             
             # Request completion with timing
             self.logger.info(f"[bold blue]<--[/bold blue] [green][{request.method}][/green] [cyan]{request.url.path}[/cyan] [magenta]({duration_ms}ms)[/magenta] [bold][{status_color}][{response.status_code}][/{status_color}][/bold]")
-            
-            # Add separator line for clarity between requests
-            self.logger.info("")  # Empty line for separation
             
             return response
             
@@ -173,6 +224,5 @@ class RichLoggingMiddleware(BaseHTTPMiddleware):
             self.logger.error(f"[yellow]Response:[/yellow] [bold red]<500 ERROR>[/bold red]")
             self.logger.error(f"[yellow]Response body:[/yellow] {{error: '{str(e)}'")
             self.logger.error(f"[bold blue]<--[/bold blue] [green][{request.method}][/green] [cyan]{request.url.path}[/cyan] [magenta]({duration_ms}ms)[/magenta] [bold red][500 ERROR][/bold red]")
-            self.logger.info("")  # Separator
             
             raise

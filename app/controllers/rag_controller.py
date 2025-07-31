@@ -27,7 +27,7 @@ def health_check():
 
 @app.post("/generate-response")
 def generate_response(question: str):
-    logger.info(f"\nGenerate response endpoint called with question: {question}")
+    logger.info(f"Generate response endpoint called with question: {question}")
 
     if not question:
         logger.error("Question cannot be empty.")
@@ -37,8 +37,8 @@ def generate_response(question: str):
         response = RagService() \
             .with_vectorstore(vectorstore) \
             .with_llm(model=llm, embeddings=embeddings, temperature=0) \
-            .with_question(question=question) \
             .with_anonymized_planning() \
+            .with_question(question=question) \
             .run(prompt=analysis_prompt)
 
         return response

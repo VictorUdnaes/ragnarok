@@ -34,6 +34,13 @@ Requirements:
 - Steps should build logically toward the final answer
 - The final step should produce the complete answer
 - Keep steps concise but complete (typically 2-5 steps total)
+
+Examples of topic areas to cover in your plan:
+1. [Foundational facts about core concept/entity]
+2. [Details about key relationships/mechanisms] 
+3. [Information about context/implications/outcomes]
+
+The plan should always include a final step that synthesizes the information gathered in previous steps to produce the final answer clearly and concisely.
 """
 
 deanonymize_prompt = """
@@ -51,7 +58,7 @@ Instructions:
 3. Maintain the exact same JSON structure and all other fields unchanged
 4. Variables should be replaced wherever they appear in any text field
 
-Return the updated plan with variables replaced:
+Return the updated plan with variables replaced. The plan should consist of 4-5 steps.
 """
 
 # QUERY AUGMENTATION -----------------------------------------------------------------------------------------------
@@ -107,45 +114,68 @@ Rewrite this query: {query}
 
 queries_from_plan_prompt = """
 Instructions:
-You are an expert at translating steps of an information retrieval plan into precise vector database queries in Norwegian. Your goal is to generate optimal search queries that will retrieve the information needed to complete each step of the given plan.
+You are an expert at translating steps of an information retrieval plan into precise NATURAL LANGUAGE queries for semantic vector search in Norwegian. 
+
+CRITICAL: You are generating queries for SEMANTIC SIMILARITY SEARCH, not SQL or database queries. 
+Your queries will be converted to embeddings and matched against document embeddings using cosine similarity.
 
 Original Question: {question}
 Plan: {plan}
 
-For each step in the plan, generate 1-3 specific queries that would retrieve the relevant information from a vector database. 
+Your Task:
+For each step in the plan, generate exactly 3 specific NATURAL LANGUAGE search queries in Norwegian that would semantically match relevant documents.
+This means that if you recieve a plan with 4 steps, you will generate 12 queries in total.
 
-Guidelines:
-- Queries should be specific and focused on retrieving factual information
-- Use natural language that would match how information is typically written/stored
-- Consider synonyms and alternative phrasings for key concepts
-- Each query should target a specific piece of information needed for that step
-- Prioritize precision over broad coverage - better to have focused queries than overly general ones
+Query Format Requirements:
+✓ CORRECT: Descriptive statements and keyword-rich phrases in Norwegian
+   - "Fornybar energi fordeler miljø økonomi"
+   - "Klimaendringer påvirkning landbruk Norge konsekvenser"
+   - "Elbil salgsstatistikk 2024 markedsandel utvikling"
 
-Example:
-Original Question: Does the statement from politician X match with current party Y line?
-Plan:
-1. Determine what party politician Jonas Gahr Støre belongs to
-2. Identify the current official positions/policies of party AP
-3. Compare the politician's statement with party positions
+✗ INCORRECT: Questions or SQL/database syntax
+   - "Hva er fordelene med fornybar energi?" (question format)
+   - "SELECT * FROM documents WHERE topic='energy'" (SQL)
+   - "MATCH (doc:Document) WHERE doc.category='climate'" (database query)
 
-Step 1: Determine what party politician Jonas Gahr Støre belongs to
-Queries:
-- What party does politician Jonas Gahr Støre belong to
-- Politician Jonas Gahr Støre party affiliation
-- Jonas Gahr Støre political party membership
+Guidelines for Effective Semantic Queries:
+1. **Use descriptive statements and noun phrases** - pack key concepts without question words
+2. **Lead with the most important keywords** - place primary concepts at the beginning
+3. **Include key concepts and terminology** that would appear in relevant documents
+4. **Consider multiple phrasings** - technical terms, common terms, and synonyms
+5. **Be specific but not overly narrow** - target the exact information needed for each step
+6. **Think about document context** - how would this information typically be written or discussed?
+7. **Use keyword-dense phrases** rather than full sentences with filler words
+8. **Include relevant domain-specific vocabulary** that would appear in target documents
 
-Step 2: Identify the current official positions/policies of party AP
-Queries:
-- Party AP official platform positions
-- Current policy positions of party AP
-- Party AP stance on [relevant topic from statement
+Language Requirements:
+- ALL queries must be in Norwegian
+- Use descriptive statements and keyword-rich phrases
+- Prioritize noun phrases and key concept clusters
+- Include relevant Norwegian-specific terms when applicable
 
-Step 3: Compare the politician's statement with party positions
-Queries:
-- Party AP position on [specific topic from statement]
-- Official party AP policy regarding [statement topic]
+Query Optimization Tips:
+- Frame queries as descriptive statements that would match document content
+- Lead with the most important keywords and concepts
+- Include context words that would appear alongside your target information
+- Consider different ways the same concept might be expressed in Norwegian text
+- Pack multiple related keywords into concise phrases
+- Think about the document types that would contain this information
 
-Respond only with the structured output as specified and every query should be in Norwegian.
+Example Transformation:
+Plan Step: "Find statistics about renewable energy adoption in Norway"
+Good Queries:
+- "Fornybar energi statistikk Norge utvikling andel"
+- "Solenergi vindkraft produksjon Norge tall"
+- "Energiomstilling Norge renewable adoption rate"
+
+Bad Queries:
+- "Hvor mye fornybar energi brukes i Norge?" (question format)
+- "SELECT statistics FROM energy WHERE country='Norway'" (SQL)
+
+Output Format:
+For each step, provide your queries in a clear, structured format. Remember: these are semantic search queries, not database commands.
+
+Respond only with the structured output as specified, with every query in natural Norwegian language suitable for semantic similarity matching.
 """
 
 # ANALYSIS ---------------------------------------------------------------------------------------------------------

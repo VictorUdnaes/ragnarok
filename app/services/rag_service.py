@@ -27,11 +27,11 @@ class RagService:
         self.queries = []
         self.llm = None
         self.should_use_anonymized_planning = False
-        logger.info("RAGService initialized.")
+        logger.info("[bold green]RAG Service initialized[/bold green]")
 
     def with_llm(self, model: ChatOpenAI, embeddings: OllamaEmbeddings, temperature=0):
         try:
-            logger.info(f"Configuring LLM with model: {model.model_name}")
+            logger.info(f"[bold green]Configuring LLM with model: {model.model_name}[/bold green]")
             self.llm = model
             self.planning_tool = PlanningTool(llm=self.llm)
             self.vectorstore._initialize_vectorstore(llm=self.llm, embeddings=embeddings)
@@ -46,12 +46,11 @@ class RagService:
             raise ValueError("Provided vectorstore is not an instance of VectorStore")
 
         self.vectorstore = vectorstore
-        logger.info("Vectorstore configured successfully.")
         return self
 
     def with_anonymized_planning(self):
         self.should_use_anonymized_planning = True
-        logger.info("Anonymized planning enabled.")
+        logger.info("[bold green]Anonymized planning enabled.[/bold green]")
         return self
 
     def with_question(self, question):
@@ -60,12 +59,11 @@ class RagService:
             raise ValueError("Question cannot be empty")
 
         self.question = question
-        logger.info(f"Question set: {question}")
+        logger.info(f"[bold green]Question set:[/bold green] {question}")
         return self
 
     def create_queries_from_plan(self):
         try:
-            logger.info("Creating queries from plan.")
             anonymized_question_obj = self.planning_tool.anonymize_question(self.question)
             anonymized_plan = self.planning_tool.create_initial_plan(anonymized_question_obj.anonymized_question)
             
@@ -74,7 +72,9 @@ class RagService:
                 mapping=anonymized_question_obj.mapping
             )
 
-            logger.info(f"Plan created with {len(self.plan_obj.steps)} steps: {self.plan_obj.steps}")
+            logger.info(f"Plan created with {len(self.plan_obj.steps)} steps:")
+            for step in enumerate(self.plan_obj.steps):
+                logger.info(f"[bold green][{step}][/bold green]")
 
             queries_obj = self.planning_tool.create_queries_from_plan(
                 question=self.question,
@@ -83,8 +83,9 @@ class RagService:
 
             self.queries = queries_obj.queries
 
-            logger.info(f"Generated {len(self.queries)} queries from plan.")
-            logger.info(f"Generated queries: {self.queries}")
+            logger.info(f"Generated {len(self.queries)} queries from plan:")
+            for query in self.queries:
+                logger.info(f"[bold green][{query}][/bold green]")
         except Exception as e:
             logger.error(f"Error creating queries from plan: {e}")
             raise
@@ -98,7 +99,7 @@ class RagService:
             return "Error: LLM not available"
 
         try:
-            logger.info("Executing RAG chain.")
+            logger.info("<-- Executing RAG chain -->")
 
             if self.should_use_anonymized_planning:
                 self.create_queries_from_plan()
@@ -120,7 +121,7 @@ class RagService:
                 )
             logger.info(f"Retrieved {len(retrieved_quotes)} quote documents.")
             docs = retrieved_chunks + retrieved_quotes
-            logger.info(f"Retrieved {len(docs)} documents from vectorstore: {docs}")
+            logger.info(f"Retrieved a total of {len(docs)} documents from vectorstore.")
             """
             relevant_content_as_string: str = self.vectorstore.remove_irrelevant_content(
                 queries=self.queries, 
@@ -139,8 +140,9 @@ class RagService:
                 "original_question": self.question,
                 "generated_queries_from_plan": self.queries
             })
-            
-            logger.info("RAG chain executed successfully.")
+            logger.info(f"[bold blue]Final answer: {answer}[/bold blue]")
+
+            logger.info("[bold green]RAG chain executed successfully.[/bold green]")
             return answer
             
         except Exception as e:

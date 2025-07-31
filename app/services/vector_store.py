@@ -24,27 +24,25 @@ class VectorStore:
         self.quote_retriever = None
         self.embedder = EmbeddingTool()
         self.llm = None
-        logger.info("VectorStore initialized.")
 
 
     def _initialize_vectorstore(self, llm: ChatOpenAI, embeddings=OllamaEmbeddings(model="mxbai-embed-large")):
         try:            
             self.llm = llm
 
-            logger.info("Initializing vectorstore.")
             # Initialize the vectorstore for storing chunks of text
             self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
                 persist_directory="./chroma/chunk_chroma_db"
             )
-            self.chunk_retriever = self.chunk_vectorstore.as_retriever()
+            self.chunk_retriever = self.chunk_vectorstore.as_retriever(search_kwargs={"k": 5})
 
             #Initialize the vectorstore for storing quotes
             self.quote_vectorstore = Chroma(
                 embedding_function=embeddings,
                 persist_directory="./chroma/quote_chroma_db"
             )
-            self.quote_retriever = self.quote_vectorstore.as_retriever()
+            self.quote_retriever = self.quote_vectorstore.as_retriever(search_kwargs={"k": 5})
 
             test_results = self.chunk_vectorstore.similarity_search("test", k=1)
             if test_results:
@@ -52,7 +50,7 @@ class VectorStore:
             else:
                 pass
 
-            logger.info("Vectorstore initialized successfully.")
+            logger.info("[bold green]Vectorstore initialized successfully.[/bold green]")
         except Exception as e:
             logger.error(f"Error initializing vectorstore: {e}")
             self.chunk_retriever = None
@@ -71,8 +69,7 @@ class VectorStore:
                 file=file,
                 pattern=r'Venstre (?:vil|ønsker)[^.]*\.'
             )
-            self.quote_vectorstore.add_documents(text_quotes)
-
+           
             if embedding_type == "both":
                 self.chunk_vectorstore.add_documents(text_chunks)
                 self.quote_vectorstore.add_documents(text_quotes)
@@ -81,7 +78,7 @@ class VectorStore:
                 self.chunk_vectorstore.add_documents(text_chunks)
 
             elif embedding_type == "quote":
-                self.chunk_vectorstore.add_documents(text_quotes)
+                self.quote_vectorstore.add_documents(text_quotes)
 
             logger.info(f"Document {file.filename} added successfully.")
         except Exception as e:
@@ -93,13 +90,27 @@ class VectorStore:
         all_docs = []
         for i, query in enumerate(queries):
             try:
-                found_docs = self.quote_retriever.invoke(query) if retriever == "chunk" else self.quote_retriever.invoke(query)
-                relevant_docs = self.remove_irrelevant_content(query, found_docs)
-                all_docs.extend(relevant_docs.relevant_content)
+                if retriever == "chunk":
+                    found_docs = self.chunk_retriever.invoke(query)
+                else:
+                    found_docs = self.quote_retriever.invoke(query)
+                all_docs.extend(found_docs)
                 
             except Exception as e:
-                pass
+                logger.error(f"Error searching for documents with query '{query}': {e}")
+                # Continue with next query instead of failing completely
 
+
+        """# Apply relevance filtering to all documents at once
+        if all_docs:
+            try:
+                relevant_docs = self.remove_irrelevant_content(queries, all_docs)
+                return relevant_docs.relevant_content
+            except Exception as e:
+                logger.error(f"Error filtering relevant content: {e}")
+                # Fall back to returning all documents if filtering fails
+                return get_unique_union(all_docs)"""
+        
         return get_unique_union(all_docs)
 
 

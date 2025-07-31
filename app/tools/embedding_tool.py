@@ -10,20 +10,20 @@ class EmbeddingTool():
         self.nlp = spacy.load("nb_core_news_sm")
 
     def create_chunks_from_document(self, file: UploadFile, chunk_size: int = 1000) -> list[Document]:
-        text_from_document = self.get_document_as_text(file)
+        cleaned_text = self.clean_text(self.get_document_as_text(file))
         text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size,
                 chunk_overlap=200
             )
-        chunks = text_splitter.split_text(text=text_from_document)
+        chunks = text_splitter.split_text(text=cleaned_text)
         document_chunks = [Document(page_content=chunk) for chunk in chunks]
         
         return document_chunks
     
     def create_chunks_from_pattern(self, file: UploadFile, pattern: str) -> list[Document]:
-        text_from_document = self.get_document_as_text(file)
+        cleaned_text = self.clean_text(self.get_document_as_text(file))
         regex = re.compile(pattern)
-        chunks = regex.findall(text_from_document)
+        chunks = regex.findall(cleaned_text)
         document_chunks = [Document(page_content=chunk) for chunk in chunks]
 
         return document_chunks
