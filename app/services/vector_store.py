@@ -4,15 +4,16 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from pathlib import Path
 from langchain.docstore.document import Document
-from utils.rag_util import get_unique_union
 from tools.embedding_tool import EmbeddingTool
-from prompts import remove_irrelevant_content_prompt
+from prompts.prompt_manager import remove_irrelevant_content_prompt
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from model.relevant_content_model import RelevantContent
 from fastapi import UploadFile
 from langchain_ollama import OllamaEmbeddings
 import logging
+import warnings
+from json import dumps, loads
 
 logger = logging.getLogger("ApplicationService")
 
@@ -85,7 +86,6 @@ class VectorStore:
             logger.error(f"Error adding document {file.filename} to vectorstore: {e}")
             raise
 
-
     def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
         all_docs = []
         for i, query in enumerate(queries):
@@ -110,9 +110,20 @@ class VectorStore:
                 logger.error(f"Error filtering relevant content: {e}")
                 # Fall back to returning all documents if filtering fails
                 return get_unique_union(all_docs)"""
-        
-        return get_unique_union(all_docs)
 
+        return self.get_unique_union(all_docs)
+
+    def get_unique_union(self, documents: list[list]):
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore")
+                flattened_docs = [dumps(doc) for sublist in documents for doc in sublist]
+                # Get unique documents
+                unique_docs = list(set(flattened_docs))
+                # Return
+                return [loads(doc) for doc in unique_docs]
+        except Exception as e:
+            return []
 
     def remove_irrelevant_content(self, queries: list[str], retrieved_documents: list[Document]) -> str:
         keep_only_relevant_content_chain = PromptTemplate(
@@ -126,3 +137,4 @@ class VectorStore:
         })
 
         return relevant_content_obj.relevant_content_as_string  
+    

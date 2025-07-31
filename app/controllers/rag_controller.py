@@ -1,30 +1,31 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from services.rag_service import RagService
-from prompts import multi_query_gen_prompt, analysis_prompt
 from services.vector_store import VectorStore
-from openai_config import openapi_client, openapi_embeddings
+from config.openai_config import openapi_client, openapi_embeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_ollama import OllamaEmbeddings
 from typing import List
-from rich_logging_setup import RichLoggingSetup, RichLoggingMiddleware
+from config.rich_logging_setup import RichLoggingSetup, RichLoggingMiddleware
 import logging
+from prompts.prompt_manager import analysis_prompt
 
+# Setup
 rich_logging_setup = RichLoggingSetup()
 app = FastAPI()
 app.add_middleware(RichLoggingMiddleware)
 rich_logging_setup.log_startup_banner()
-
 logger = logging.getLogger("ApplicationService")
-
 vectorstore = VectorStore()
 llm = openapi_client()
 embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+
 
 @app.get("/health")
 def health_check():
     logger.info("Health check endpoint called.")
     return {"status": "healthy", "message": "RAG Service is running"}
 
+# Endpoint to execute a RAG query
 @app.post("/generate-response")
 def generate_response(question: str):
     logger.info(f"Generate response endpoint called with question: {question}")
@@ -47,6 +48,7 @@ def generate_response(question: str):
         logger.exception("Error generating response.")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+# Endpoint to embed documents into the vector store
 @app.post("/embed-documents")
 async def embed_documents(files: List[UploadFile] = File(...)):
     vectorstore._initialize_vectorstore(llm=llm, embeddings=embeddings)

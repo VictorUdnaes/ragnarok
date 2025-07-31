@@ -2,10 +2,10 @@ from model.anonymize_model import AnonymizedQuestion, DeanonymizedPlan
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI
-from prompts import anonymizer_prompt, deanonymize_prompt, planner_prompt, queries_from_plan_prompt
 from model.plan_model import Plan
 from langchain.schema.runnable import RunnableSequence
 from model.queries_from_plan import QueriesFromPlan
+from prompts.prompt_manager import anonymizer_prompt, planner_prompt, deanonymize_prompt, queries_from_plan_prompt
 
 class PlanningTool:
     def __init__(self, llm: ChatOpenAI):

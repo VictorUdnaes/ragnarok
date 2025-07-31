@@ -1,10 +1,9 @@
 import logging
 from langchain_openai import OpenAIEmbeddings
 from services.vector_store import VectorStore
-from utils.rag_util import sanitize_response
 from model.response_model import RAGResponse
 from tools.query_augmentation_tool import QueryAugmentationTool
-from openai_config import openapi_client
+from config.openai_config import openapi_client
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from model.relevant_content_model import RelevantContent
@@ -14,6 +13,7 @@ from model.anonymize_model import DeanonymizedPlan
 from langchain_openai import ChatOpenAI
 from langchain_ollama import OllamaEmbeddings
 from model.plan_model import Plan
+from prompts.prompt_manager import PromptManager
 
 
 logger = logging.getLogger("ApplicationService")
@@ -99,13 +99,14 @@ class RagService:
             return "Error: LLM not available"
 
         try:
-            logger.info("<-- Executing RAG chain -->")
-
+            logger.info("[bold yellow]<-- Executing RAG chain -->[/bold yellow]")
+            # Create queries from plan if anonymized planning is enabled
             if self.should_use_anonymized_planning:
                 self.create_queries_from_plan()
             else:
                 self.queries = [self.question]
-
+            
+            # Retrieve documents from vectorstore using the chunk and quote retrievers
             retrieved_chunks: list[Document] = self.vectorstore \
                 .search_for_documents(
                     queries=self.queries, 
@@ -113,6 +114,7 @@ class RagService:
                     k=5
                 )
             logger.info(f"Retrieved {len(retrieved_chunks)} chunk documents.")
+
             retrieved_quotes: list[Document] = self.vectorstore \
                 .search_for_documents(
                     queries=self.queries, 
@@ -122,6 +124,8 @@ class RagService:
             logger.info(f"Retrieved {len(retrieved_quotes)} quote documents.")
             docs = retrieved_chunks + retrieved_quotes
             logger.info(f"Retrieved a total of {len(docs)} documents from vectorstore.")
+
+            # Remove irrelevant content from retrieved documents
             """
             relevant_content_as_string: str = self.vectorstore.remove_irrelevant_content(
                 queries=self.queries, 
@@ -129,6 +133,8 @@ class RagService:
             )
             logger.info("Content retrieved: %s", relevant_content_as_string)
             """
+
+            # Generate final answer using the LLM and the provided prompt
             final_chain = PromptTemplate(
                 input_variables=["context", "plan", "original_question", "generated_queries_from_plan"],
                 template=prompt
@@ -141,8 +147,8 @@ class RagService:
                 "generated_queries_from_plan": self.queries
             })
             logger.info(f"[bold blue]Final answer: {answer}[/bold blue]")
-
             logger.info("[bold green]RAG chain executed successfully.[/bold green]")
+            
             return answer
             
         except Exception as e:
