@@ -4,4 +4,4 @@ app/chroma/
 application.log
 __pycache__/
 venv/
-app/openai_config.py
+app/openai_config.py    

@@ -24,5 +24,6 @@ chromadb
 # HTTP requests
 requests
 
+python-multipart
 # Note: You will also need to install the Norwegian spaCy model:
 # python -m spacy download nb_core_news_sm

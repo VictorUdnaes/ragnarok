@@ -18,7 +18,8 @@ class PromptManager:
             "analysis.md": ["context", "plan", "original_question", "generated_queries_from_plan"],
             "multi_query_gen.md": ["question"],
             "query_optimization.md": ["query"],
-            "remove_irrelevant_content.md": ["queries", "retrieved_documents"]
+            "remove_irrelevant_content.md": ["queries", "retrieved_documents"],
+            "rerun.md": ["original_input_variables", "original_prompt", "format_object", "correction"]
         }
         
         for filename, variables in prompt_configs.items():
@@ -63,6 +64,10 @@ class PromptManager:
     def remove_irrelevant_content_prompt(self) -> str:
         return self._prompts['remove_irrelevant_content'].template
     
+    @property
+    def rerun_prompt(self) -> str:
+        return self._prompts['rerun'].template
+    
 _prompt_manager = PromptManager()
 
 # Export the prompts as module-level variables for backward compatibility
@@ -74,4 +79,5 @@ analysis_prompt = _prompt_manager.analysis_prompt
 multi_query_gen_prompt = _prompt_manager.multi_query_gen_prompt
 query_optimization_prompt = _prompt_manager.query_optimization_prompt
 remove_irrelevant_content_prompt = _prompt_manager.remove_irrelevant_content_prompt
+rerun_prompt = _prompt_manager.rerun_prompt
 

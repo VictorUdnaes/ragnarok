@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from services.rag_service import RagService
+from services.rag_service import RagBuilder
 from services.vector_store import VectorStore
 from config.openai_config import openapi_client, openapi_embeddings
 from langchain_openai import OpenAIEmbeddings
@@ -9,12 +9,16 @@ from config.rich_logging_setup import RichLoggingSetup, RichLoggingMiddleware
 import logging
 from prompts.prompt_manager import analysis_prompt
 
-# Setup
+# Setup logging
 rich_logging_setup = RichLoggingSetup()
-app = FastAPI()
-app.add_middleware(RichLoggingMiddleware)
 rich_logging_setup.log_startup_banner()
 logger = logging.getLogger("ApplicationService")
+
+# Initialize FastAPI app with rich logging middleware
+app = FastAPI()
+app.add_middleware(RichLoggingMiddleware)
+
+# Setup RAG components
 vectorstore = VectorStore()
 llm = openapi_client()
 embeddings = OllamaEmbeddings(model="mxbai-embed-large")
@@ -35,7 +39,7 @@ def generate_response(question: str):
         return {"error": "Question cannot be empty"}
 
     try:
-        response = RagService() \
+        response = RagBuilder() \
             .with_vectorstore(vectorstore) \
             .with_llm(model=llm, embeddings=embeddings, temperature=0) \
             .with_anonymized_planning() \
@@ -109,3 +113,9 @@ async def embed_documents(files: List[UploadFile] = File(...)):
 
     logger.info(f"Embedding process completed with status: {status}")
     return response
+
+# TODO: Delete documents matching metadata filter
+
+app.delete("/delete-document")
+def delete_document(filename: str):
+    vectorstore.delete(where={"source": filename})
