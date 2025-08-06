@@ -56,21 +56,21 @@ class AbstractRagStep(ABC):
             format_object: Type[BaseModel],
         ):
 
-        input_variables.update({
+        corrected_input_variables = {
             "original_prompt": original_prompt,
             "original_response": self.response, 
             "correction": self.correctionDict[method_name],
             "original_input_variables": str(input_variables)
-        })
+        }
 
         chain = (
             PromptTemplate(
-                input_variables=input_variables.keys(),
+                input_variables=corrected_input_variables.keys(),
                 template=rerun_prompt
             ) | self.llm.with_structured_output(format_object)
         )
 
-        return chain.invoke(input_variables)
+        return chain.invoke(corrected_input_variables)
 
     def execute_runnable_sequence(
             self, 
