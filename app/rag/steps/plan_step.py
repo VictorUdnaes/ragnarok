@@ -1,19 +1,22 @@
-from app.rag.steps.abstract.abstract_rag_step import AbstractRagStep
+from rag.steps.abstract.abstract_rag_step import AbstractRagStep
 from model.llm_response_model import LLMResponse, ResponseType
 from typing import Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from tools.planning_tool import PlanningTool
 from model.plan_model import Plan
 from model.anonymize_model import AnonymizedQuestion, DeanonymizedPlan
 from prompts.prompt_manager import anonymizer_prompt, planner_prompt, deanonymize_prompt
+from langchain_openai import ChatOpenAI
 from logging import getLogger
 
 logger = getLogger("PlanStep")
 
+# TODO: add functionality for not using anonymization
 class PlanStep(AbstractRagStep):
-    def __init__(self,query: str):
+    def __init__(self, llm: ChatOpenAI, query: str):
+        self.llm = llm
         self.query = query
-        self.planning_tool = PlanningTool()
+        self.planning_tool = PlanningTool(llm=llm)
         self.plan: Plan = None
         self.correctionDict: dict[str, str] = {}
 
@@ -33,8 +36,8 @@ class PlanStep(AbstractRagStep):
 
         self.response = LLMResponse(
             step_name="Anonymized Plan",
-            response_type=ResponseType.DICT,
-            data=self.plan
+            response_type=ResponseType.LIST,
+            data=self.plan.steps
         )
 
         # Reset correction after plan is generated
@@ -50,8 +53,7 @@ class PlanStep(AbstractRagStep):
         logger.info("Rerunning plan step with correction")
         return self.execute()
 
-    # Util methods for generating the plan -------------------------------------------------
-    
+    # Util methods for generating the plan 
     def anonymize_question(self, question: str) -> AnonymizedQuestion:
         runnable = None
         if self.correctionDict.get("anonymize_question"):
@@ -95,4 +97,24 @@ class PlanStep(AbstractRagStep):
             "plan": plan,
             "mapping": mapping
         })
+    
+class PlanStepSpecification(BaseModel):
+    query: str = Field(..., description="The original question to be planned.")
+    plan: Plan = Field(..., description="The generated plan based on the question.")
+    correction: Dict[str, str] = Field(default_factory=dict, description="Corrections to apply to the plan step.")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "query": self.query,
+            "plan": self.plan.dict(),
+            "correction": self.correction
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PlanStepSpecification':
+        return cls(
+            query=data.get("query", ""),
+            plan=Plan(**data.get("plan", {})),
+            correction=data.get("correction", {})
+        )
 

@@ -12,25 +12,7 @@ class PlanningTool:
         self.llm = llm
 
 
-    def anonymize_question(self, question: str) -> AnonymizedQuestion:
-        return self \
-            .build_chain(["question"], anonymizer_prompt, AnonymizedQuestion) \
-            .invoke(input=question)
     
-
-    def create_initial_plan(self, question: str) -> Plan:
-        return self \
-            .build_chain(["question"], planner_prompt, Plan) \
-            .invoke(input=question)
-
-
-    def deanonymize_plan(self, plan: str, mapping:str) -> Plan:
-        return self \
-            .build_chain(["plan", "mapping"], deanonymize_prompt, Plan) \
-            .invoke({
-                "plan": plan,
-                "mapping": mapping
-            })
     
 
     def create_queries_from_plan(self, question: str, plan: Plan) -> QueriesFromPlan:

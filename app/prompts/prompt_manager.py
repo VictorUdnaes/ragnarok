@@ -3,7 +3,7 @@ from langchain.prompts import PromptTemplate
 from typing import Dict, List
 
 class PromptManager:
-    def __init__(self, prompts_dir: str = "prompts"):
+    def __init__(self, prompts_dir: str = "."):
         self.prompts_dir = Path(prompts_dir)
         self._prompts = {}
         self._load_all_prompts()
@@ -23,7 +23,7 @@ class PromptManager:
         }
         
         for filename, variables in prompt_configs.items():
-            file_path = self.prompts_dir / filename
+            file_path = Path(__file__).parent / filename
             if file_path.exists():
                 template = file_path.read_text(encoding='utf-8')
                 prompt_name = filename.replace('.md', '').replace('-', '_')

@@ -7,6 +7,7 @@ from model.chain_specification_model import LangchainSpecification
 from pydantic import BaseModel
 from prompts.prompt_manager import rerun_prompt
 from config.openai_config import ChatOpenAI
+from model.plan_model import Plan
 
 
 class AbstractRagStep(ABC):
@@ -23,21 +24,20 @@ class AbstractRagStep(ABC):
         pass
     
     @abstractmethod
-    def rerun_with_feedback(self, response: LLMResponse, user_feedback: str) -> LLMResponse:
+    def rerun_with_correction(self, response: LLMResponse, correction: str) -> LLMResponse:
         pass
 
     def build_runnable_sequence(
             self, 
             input_variables: list[str], 
             prompt: str, 
-            format_object: 
-            Type[BaseModel]
+            format_object
         ) -> RunnableSequence:
         chain = (
             PromptTemplate(
                 input_variables=input_variables,
                 template=prompt
-            ) | self.llm.with_structured_output(format_object)
+            ) | self.llm.with_structured_output(Plan)
         )
 
         return chain 
