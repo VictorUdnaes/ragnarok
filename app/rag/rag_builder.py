@@ -18,7 +18,7 @@ class RagBuilder:
             query: str
         ):
         self.available_retrievers: list[str] = ["chunk", "quote"]
-        self.vectorstore = vectorstore
+        self.vectorstore = vectorstore._initialize_vectorstore(llm=llm, embeddings=embeddings)
         self.planning_tool = PlanningTool(llm=llm)
         self.query = query
         self.llm = llm
@@ -28,8 +28,9 @@ class RagBuilder:
         self._steps_list: list[AbstractRagStep] = []
 
     def addStep(self, step: AbstractRagStep):
+        step.llm = self.llm  # Ensure the step has access to the LLM
+        step.query = self.query  # Ensure the step has access to the query
         self._steps_list.append(step)
-        # Use the raw class name directly
         step_name = step.__class__.__name__
         self.steps[step_name] = step
 
