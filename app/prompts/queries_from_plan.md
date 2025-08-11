@@ -1,4 +1,3 @@
-queries_from_plan_prompt = """
 Instructions:
 You are an expert at translating steps of an information retrieval plan into precise NATURAL LANGUAGE queries for semantic vector search in Norwegian. 
 
@@ -86,4 +85,3 @@ Query 2: Bærekraftig energi CO2 reduksjon miljøgevinst
 Query 3: Grønn energi økosystem påvirkning konsekvenser
 
 Respond only with this structured output format, ensuring every query is in natural Norwegian language suitable for semantic similarity matching.
-"""

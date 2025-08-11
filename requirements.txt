@@ -8,6 +8,12 @@ langchain-community
 langchain-openai
 langchain-text-splitters
 langchain-chroma
+langchain-ollama
+langchain-experimental
+
+# AI/ML APIs
+openai
+ollama
 
 # Data validation and serialization
 pydantic
@@ -24,6 +30,11 @@ chromadb
 # HTTP requests
 requests
 
+# Console output and logging
+rich
+
+# File upload handling
 python-multipart
+
 # Note: You will also need to install the Norwegian spaCy model:
 # python -m spacy download nb_core_news_sm

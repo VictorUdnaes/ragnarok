@@ -57,7 +57,27 @@ class VectorStore:
             self.chunk_retriever = None
             raise
 
-    # Endre så den tar embedding pattern som parameter
+    def add_document_from_filepath(self, embedding_type: str, file_name: str):
+        file_path = Path(__file__).parent.parent.parent / "app" / "documents" / file_name
+        try:
+            logger.info(f"Adding document to vectorstore from file: {file_path}")
+            with open(file_path, "rb") as file:
+                text_chunks = self.embedder.create_chunks_from_document(
+                file=file,
+                chunk_size=1000
+            )
+
+            text_quotes = self.embedder.create_chunks_from_pattern(
+                file=file,
+                pattern=r'Venstre (?:vil|ønsker)[^.]*\.'
+            )
+            
+            self.chunk_vectorstore.add_documents(text_chunks)
+            self.quote_vectorstore.add_documents(text_quotes)
+        except Exception as e:
+            logger.error(f"Error adding document from file {file_path} to vectorstore: {e}")
+            raise
+
     def add_document_to_store(self, embedding_type: str, file: UploadFile):
         try:
             logger.info(f"Adding document to vectorstore: {file.filename}")

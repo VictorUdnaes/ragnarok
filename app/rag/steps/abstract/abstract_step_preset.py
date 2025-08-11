@@ -8,15 +8,20 @@ from pydantic import BaseModel
 from prompts.prompt_manager import rerun_prompt
 from langchain_ollama import ChatOllama
 from model.plan_model import Plan
+from services.vector_store import VectorStore
 from enum import Enum
 import logging
 
 logger = logging.getLogger("ApplicationService")
 
-class AbstractRagStep(ABC):
-    def __init__(self):
-        self.llm: ChatOllama = None  # Type: ignore
-        self.query: str = ""
+class AbstractStepPreset(ABC):
+    def __init__(self, llm: ChatOllama = None, query: str = ""):
+        self.vectorstore: VectorStore = None  # Type: ignore
+        self.query = query
+        self.llm: ChatOllama = llm
+        self.plan_obj: Plan = None
+        self.generated_queries: list[str] = []
+        self.available_retrievers: list[str] = ["chunk", "quote"]
         self.response: LLMResponse = None
         self.correctionDict: dict[str, str] = {}
 

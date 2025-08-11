@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from services.rag_service import RagBuilder
+from app.rag.rag_pipeline import RagBuilder
 from services.vector_store import VectorStore
 from config.openai_config import openapi_client, openapi_embeddings
 from langchain_openai import OpenAIEmbeddings
