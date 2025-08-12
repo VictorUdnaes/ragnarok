@@ -207,7 +207,7 @@ class RichLoggingMiddleware(BaseHTTPMiddleware):
             
             self.logger.info("")
             # Response log
-            self.logger.info(f"[yellow]Response:[/yellow] [bold]<{response.status_code} OK>[/bold]")
+            self.logger.info(f"[green][[/green][yellow]Response[/yellow][green]][/green] [bold]<{response.status_code} OK>[/bold]")
             
             # Optional: Log response body for certain endpoints (be careful with large responses)
             # self.logger.info(f"[yellow]Response body:[/yellow] {{status: 'success'}}")

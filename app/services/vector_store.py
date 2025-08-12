@@ -34,22 +34,22 @@ class VectorStore:
             # Initialize the vectorstore for storing chunks of text
             self.chunk_vectorstore = Chroma(
                 embedding_function=embeddings,
-                persist_directory="./chroma/chunk_chroma_db"
+                persist_directory="./app/chroma/chunk_chroma_db"
             )
             self.chunk_retriever = self.chunk_vectorstore.as_retriever(search_kwargs={"k": 5})
 
             #Initialize the vectorstore for storing quotes
             self.quote_vectorstore = Chroma(
                 embedding_function=embeddings,
-                persist_directory="./chroma/quote_chroma_db"
+                persist_directory="./app/chroma/quote_chroma_db"
             )
             self.quote_retriever = self.quote_vectorstore.as_retriever(search_kwargs={"k": 5})
 
             test_results = self.chunk_vectorstore.similarity_search("test", k=1)
             if test_results:
-                pass
+                logger.info(f"[bold green]Vectorstore test successful - found {len(test_results)} test results[/bold green]")
             else:
-                pass
+                logger.warning("[bold yellow]Vectorstore test returned no results - database may be empty[/bold yellow]")
 
             logger.info("[bold green]Vectorstore initialized successfully.[/bold green]")
         except Exception as e:
@@ -106,7 +106,7 @@ class VectorStore:
             logger.error(f"Error adding document {file.filename} to vectorstore: {e}")
             raise
 
-    def search_for_documents(self, retriever: str, queries, k: int = 5) -> list[Document]:
+    def search_for_documents(self, queries, retriever: str, k: int = 5) -> list[Document]:
         all_docs = []
         for i, query in enumerate(queries):
             try:
@@ -115,6 +115,7 @@ class VectorStore:
                 else:
                     found_docs = self.quote_retriever.invoke(query)
                 all_docs.extend(found_docs)
+                logger.info(f"Query '{query}' returned {len(found_docs)} documents from {retriever} retriever")
                 
             except Exception as e:
                 logger.error(f"Error searching for documents with query '{query}': {e}")
